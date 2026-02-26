@@ -1,0 +1,22 @@
+inventory:
+  - id: web_servers
+    host:
+      address: localhost 
+      user: khill 
+    auth:
+      password:
+        # value: "Don't use this for anyhting other than tests"
+        # agent.enabled: true
+        # key:
+        #    path: /home/me/.ssh/id_ed25519
+        #    openssh_cert_path: /home/me/.ssh/id_ed25519-cert.pub
+        #    passphrase_env: MY_KEY_PASSPHRASE
+        env: web_pass
+procedures:
+- id: default
+  tasks:
+    - id: apt_update
+      command:
+        argv: ["touch", "/Users/khill/Documents/Repositories/ekso/test.txt"]
+      critical: true
+
