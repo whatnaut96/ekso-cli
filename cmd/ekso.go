@@ -1,0 +1,109 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+	"sync"
+
+	"ekso/internal/inventory"
+	"ekso/internal/procedure"
+	"ekso/internal/session"
+
+	"github.com/go-yaml/yaml"
+	"github.com/urfave/cli/v3"
+)
+
+type Config struct {
+	Inventory  []inventory.InventoryItem `yaml:"inventory"`
+	Procedures []procedure.Procedure     `yaml:"procedures"`
+}
+
+func main() {
+	cmd := &cli.Command{
+		UseShortOptionHandling: true,
+		Name:                   "ekso",
+		Usage:                  "an agentless orchestration tool to run on any host",
+		Flags: []cli.Flag{
+			&cli.StringFlag{Name: "file", Aliases: []string{"f"}, Usage: "path to the yaml file defining inventory and procedures"},
+			&cli.BoolFlag{Name: "verbose", Aliases: []string{"v"}, Usage: "verbose output", Value: false},
+			&cli.BoolFlag{Name: "dry-run", Aliases: []string{"d"}, Usage: "only output info without running any tasks", Value: false},
+			&cli.BoolFlag{Name: "no-barrier", Usage: "execute tasks without a barrier strategy", Value: false},
+			&cli.UintFlag{Name: "timeout", Usage: "timeout length for ssh connections", Value: 10},
+		},
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			configData, err := os.ReadFile(cmd.String("file"))
+			if err != nil {
+				panic(fmt.Errorf("failed to read config file: %w", err))
+			}
+
+			var config Config
+			if err := yaml.Unmarshal(configData, &config); err != nil {
+				panic(fmt.Errorf("failed to unmarshal yaml: %w", err))
+			}
+
+			clients := make([]session.HostClient, 0, len(config.Inventory))
+
+			for _, item := range config.Inventory {
+				c, err := session.DialSSHToHost(item.Host, item.Auth, cmd.Uint("timeout"))
+				if err != nil {
+					panic(err)
+				}
+				clients = append(clients, session.HostClient{item, c})
+			}
+
+			defer session.CloseClients(clients)
+
+			if cmd.Bool("no-barrier") {
+				resultsCh := make(chan session.TaskResult, 64)
+				var wg sync.WaitGroup
+				wg.Add(len(clients))
+				for _, hc := range clients {
+					go session.RunTaskOnHostWithoutBarrier(hc, config.Procedures, resultsCh, &wg)
+					go func() { wg.Wait(); close(resultsCh) }()
+					var failures int
+					for r := range resultsCh {
+						if r.Err != nil {
+							failures++
+							fmt.Printf("[FAIL] host=%s proc=%s task=%s err=%v\n", r.HostID, r.ProcID, r.TaskID, r.Err)
+						} else {
+							fmt.Printf("[OK]  host=%s proc=%s task=%s\n", r.HostID, r.ProcID, r.TaskID)
+						}
+					}
+					if failures > 0 {
+						return fmt.Errorf("execution failed: failures=%d", failures)
+					}
+				}
+			} else {
+				for _, proc := range config.Procedures {
+					for _, task := range proc.Tasks {
+						resultsCh := make(chan session.TaskResult, 64)
+						var wg sync.WaitGroup
+						wg.Add(len(clients))
+						for _, hc := range clients {
+							go session.RunTaskOnHost(hc, proc, task, resultsCh, &wg)
+						}
+						go func() { wg.Wait(); close(resultsCh) }()
+						var failures int
+						for r := range resultsCh {
+							if r.Err != nil {
+								failures++
+								fmt.Printf("[FAIL] host=%s proc=%s task=%s err=%v\n", r.HostID, r.ProcID, r.TaskID, r.Err)
+							} else {
+								fmt.Printf("[OK]  host=%s proc=%s task=%s\n", r.HostID, r.ProcID, r.TaskID)
+							}
+						}
+						if failures > 0 {
+							return fmt.Errorf("task failed: proc=%s task=%s failures=%d", proc.ID, task.ID, failures)
+						}
+					}
+				}
+			}
+			return nil
+		},
+	}
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
+		log.Fatal(err)
+	}
+}
