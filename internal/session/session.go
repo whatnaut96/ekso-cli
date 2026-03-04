@@ -60,18 +60,16 @@ func DialSSHToHost(host inventory.Host, auth auth.Auth, timeout uint) (*ssh.Clie
 	return client, nil
 }
 
-
 func RunCommand(client *ssh.Client, cmd string, shell string) (string, error) {
 	sess, err := client.NewSession()
 	if err != nil {
 		return "", fmt.Errorf("new session: %w", err)
 	}
 	defer sess.Close()
-	
+
 	// TODO wrap this in a more robust check so we can determine shells.
 	// Maybe make it a CLI flag
 	wrappedCmd := fmt.Sprintf(`%q -lc %q`, shell, cmd)
-
 
 	stdout, err := sess.StdoutPipe()
 	if err != nil {
@@ -118,7 +116,7 @@ func RunTaskOnHostWithoutBarrier(hc HostClient, procs []procedure.Procedure, res
 				cmd := procedure.ArgVToShell(task.Command.ArgV)
 				out, err = RunCommand(hc.Client, cmd, shell)
 			case task.Command.Exec != "":
-				out, err= RunCommand(hc.Client, task.Command.Exec, shell)
+				out, err = RunCommand(hc.Client, task.Command.Exec, shell)
 			default:
 				err = fmt.Errorf("no command field specified")
 			}
@@ -140,12 +138,12 @@ func RunTaskOnHost(hc HostClient, proc procedure.Procedure, task procedure.Task,
 		cmd := procedure.ArgVToShell(task.Command.ArgV)
 		out, err = RunCommand(hc.Client, cmd, shell)
 	case task.Command.Exec != "":
-		out, err= RunCommand(hc.Client, task.Command.Exec, shell)
+		out, err = RunCommand(hc.Client, task.Command.Exec, shell)
 	default:
 		err = fmt.Errorf("no command field specified")
 	}
-	
+
 	resultsChannel <- TaskResult{hc.Item.ID, proc.ID, task.ID, out, err}
-	
+
 	return nil
 }

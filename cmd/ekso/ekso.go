@@ -24,16 +24,31 @@ func main() {
 	cmd := &cli.Command{
 		UseShortOptionHandling: true,
 		Name:                   "ekso",
-		Usage:                  "an agentless orchestration tool to run on any host",
+		Usage:                  "an distributed task runner to run on any host",
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "file", Aliases: []string{"f"}, Usage: "path to the yaml file defining inventory and procedures"},
 			&cli.BoolFlag{Name: "verbose", Aliases: []string{"v"}, Usage: "verbose output", Value: false},
 			&cli.BoolFlag{Name: "dry-run", Aliases: []string{"d"}, Usage: "only output info without running any tasks", Value: false},
 			&cli.BoolFlag{Name: "no-barrier", Usage: "execute tasks without a barrier strategy", Value: false},
 			&cli.UintFlag{Name: "timeout", Usage: "timeout length for ssh connections", Value: 10},
+			&cli.StringFlag{Name: "procedure", Aliases: []string{"p"}, Usage: "tag name of the procedure to run"},
+			&cli.StringFlag{Name: "inventory", Aliases: []string{"p"}, Usage: "tag name of the hosts to run tasks on"},
+			&cli.BoolFlag{Name: "all-hosts", Usage: "run procedure on all hosts"},
+			&cli.BoolFlag{Name: "all-procedures", Usage: "run all procedures on the host"},
 		},
+
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			configData, err := os.ReadFile(cmd.String("file"))
+			var configData []byte
+			var err error
+
+			if cmd.String("file") != "" {
+				configData, err = os.ReadFile(cmd.String("file"))
+			} else if cmd.Bool("stdin") {
+				// Read from stdin
+			} else {
+				return fmt.Errorf("no input method specified")
+			}
+
 			if err != nil {
 				panic(fmt.Errorf("failed to read config file: %w", err))
 			}
@@ -42,18 +57,18 @@ func main() {
 			if err := yaml.Unmarshal(configData, &config); err != nil {
 				panic(fmt.Errorf("failed to unmarshal yaml: %w", err))
 			}
-
 			clients := make([]session.HostClient, 0, len(config.Inventory))
-
-			for _, item := range config.Inventory {
-				c, err := session.DialSSHToHost(item.Host, item.Auth, cmd.Uint("timeout"))
-				if err != nil {
-					panic(err)
+			if cmd.Bool("all-hosts") {
+				for _, item := range config.Inventory {
+					c, err := session.DialSSHToHost(item.Host, item.Auth, cmd.Uint("timeout"))
+					if err != nil {
+						panic(err)
+					}
+					clients = append(clients, session.HostClient{item, c})
 				}
-				clients = append(clients, session.HostClient{item, c})
-			}
 
-			defer session.CloseClients(clients)
+				defer session.CloseClients(clients)
+			}
 
 			if cmd.Bool("no-barrier") {
 				resultsCh := make(chan session.TaskResult, 64)

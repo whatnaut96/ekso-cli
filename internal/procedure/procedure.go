@@ -17,26 +17,26 @@ type Procedure struct {
 type Task struct {
 	ID      string  `yaml:"id"`
 	Command Command `yaml:"command"`
-	Shell string `yaml:"shell"`
+	Shell   string  `yaml:"shell"`
 }
 
 type Command struct {
-	ArgV    []string   `yaml:"argv,omitempty"`
-	Exec    string     `yaml:"exec,omitempty"`
-	Builtin *BuiltinInvocation     `yaml:"builtin,omitempty"`
-	With    *yaml.Node `yaml:"with,omitempty"`
+	ArgV    []string           `yaml:"argv,omitempty"`
+	Exec    string             `yaml:"exec,omitempty"`
+	Builtin *BuiltinInvocation `yaml:"builtin,omitempty"`
+	With    *yaml.Node         `yaml:"with,omitempty"`
 }
 
 type BuiltinInvocation struct {
-	Tool string
+	Tool   string
 	Action string
-	Args *yaml.Node
+	Args   *yaml.Node
 }
 
 func (c *Command) UnmarshalYAML(value *yaml.Node) error {
 	var tmp struct {
-		ArgV       []string  `yaml:"argv,omitempty"`
-		Exec       string    `yaml:"exec,omitempty"`
+		ArgV       []string   `yaml:"argv,omitempty"`
+		Exec       string     `yaml:"exec,omitempty"`
 		BuiltinRaw *yaml.Node `yaml:"builtin,omitempty"`
 		With       *yaml.Node `yaml:"with,omitempty"`
 	}
@@ -90,7 +90,7 @@ func (c *Command) UnmarshalYAML(value *yaml.Node) error {
 			Args:   args,
 		}
 		// with is allowed for builtin (optional)
-	}	
+	}
 
 	*c = Command{
 		ArgV:    tmp.ArgV,
