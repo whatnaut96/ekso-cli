@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
@@ -27,7 +26,8 @@ func (k KeyAuth) getAuthMethod() (ssh.AuthMethod, error) {
 	if k.PassphraseEnv != "" {
 		passphrase := os.Getenv(k.PassphraseEnv)
 		if passphrase == "" {
-			sshKeyErr = errors.New(fmt.Sprintf("env %s not set", k.PassphraseEnv))
+			sshKeyErr = fmt.Errorf("env %s not set", k.PassphraseEnv)
+			return nil, sshKeyErr
 		}
 		signer, sshKeyErr = ssh.ParsePrivateKeyWithPassphrase(
 			keyBytes,

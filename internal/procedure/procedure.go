@@ -9,6 +9,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const MinToolCount = 2
+
 type Procedure struct {
 	ID    string `yaml:"id"`
 	Tasks []Task
@@ -108,8 +110,8 @@ func parseBuiltin(n *yaml.Node) (tool string, action string, args *yaml.Node, er
 	if n.Kind != yaml.MappingNode {
 		return "", "", nil, fmt.Errorf("command.builtin must be a mapping (e.g. builtin: {helm: {install: [...]}})")
 	}
-	if len(n.Content) != 2 {
-		return "", "", nil, fmt.Errorf("command.builtin must contain exactly one builtin tool (got %d keys)", len(n.Content)/2)
+	if len(n.Content) != MinToolCount {
+		return "", "", nil, fmt.Errorf("command.builtin must contain exactly one builtin tool (got %d keys)", len(n.Content)/MinToolCount)
 	}
 
 	toolKey := n.Content[0]
@@ -122,8 +124,8 @@ func parseBuiltin(n *yaml.Node) (tool string, action string, args *yaml.Node, er
 	if toolVal.Kind != yaml.MappingNode {
 		return "", "", nil, fmt.Errorf("command.builtin.%s must be a mapping of actions", tool)
 	}
-	if len(toolVal.Content) != 2 {
-		return "", "", nil, fmt.Errorf("command.builtin.%s must contain exactly one action (got %d keys)", tool, len(toolVal.Content)/2)
+	if len(toolVal.Content) != MinToolCount {
+		return "", "", nil, fmt.Errorf("command.builtin.%s must contain exactly one action (got %d keys)", tool, len(toolVal.Content)/MinToolCount)
 	}
 
 	actionKey := toolVal.Content[0]

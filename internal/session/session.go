@@ -31,7 +31,7 @@ type TaskResult struct {
 	Err    error
 }
 
-func DialSSHToHost(host inventory.Host, auth auth.Auth, timeout uint) (*ssh.Client, error) {
+func DialSSHToHost(host inventory.Host, auth auth.Auth, timeout int64) (*ssh.Client, error) {
 	khPath := filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts")
 	hostKeyCallback, err := knownhosts.New(khPath)
 	if err != nil {
@@ -65,7 +65,12 @@ func RunCommand(client *ssh.Client, cmd string, shell string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("new session: %w", err)
 	}
-	defer sess.Close()
+	defer func() {
+		err = sess.Close()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "close session: %v\n", err)
+		}
+	}()
 
 	// TODO wrap this in a more robust check so we can determine shells.
 	// Maybe make it a CLI flag
@@ -96,12 +101,16 @@ func RunCommand(client *ssh.Client, cmd string, shell string) (string, error) {
 
 }
 
-func CloseClients(clients []HostClient) {
+func CloseClients(clients []HostClient) error {
 	for _, hc := range clients {
 		if hc.Client != nil {
-			hc.Client.Close()
+			err := hc.Client.Close()
+			if err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 func RunTaskOnHostWithoutBarrier(hc HostClient, procs []procedure.Procedure, resultsChannel chan TaskResult, wg *sync.WaitGroup) error {

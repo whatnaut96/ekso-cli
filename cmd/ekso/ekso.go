@@ -20,6 +20,11 @@ type Config struct {
 	Procedures []procedure.Procedure     `yaml:"procedures"`
 }
 
+const (
+	DefaultSSHTimeout       = 10
+	ResultChannelBufferSize = 64
+)
+
 func main() {
 	cmd := &cli.Command{
 		UseShortOptionHandling: true,
@@ -30,11 +35,11 @@ func main() {
 			&cli.BoolFlag{Name: "verbose", Aliases: []string{"v"}, Usage: "verbose output", Value: false},
 			&cli.BoolFlag{Name: "dry-run", Aliases: []string{"d"}, Usage: "only output info without running any tasks", Value: false},
 			&cli.BoolFlag{Name: "no-barrier", Usage: "execute tasks without a barrier strategy", Value: false},
-			&cli.UintFlag{Name: "timeout", Usage: "timeout length for ssh connections", Value: 10},
+			&cli.Int64Flag{Name: "timeout", Usage: "timeout length for ssh connections", Value: DefaultSSHTimeout},
 			&cli.StringFlag{Name: "procedure", Aliases: []string{"p"}, Usage: "tag name of the procedure to run"},
 			&cli.StringFlag{Name: "inventory", Aliases: []string{"p"}, Usage: "tag name of the hosts to run tasks on"},
-			&cli.BoolFlag{Name: "all-hosts", Usage: "run procedure on all hosts"},
-			&cli.BoolFlag{Name: "all-procedures", Usage: "run all procedures on the host"},
+			&cli.BoolFlag{Name: "all-hosts", Usage: "run procedure on all hosts", Value: false},
+			&cli.BoolFlag{Name: "all-procedures", Usage: "run all procedures on the host", Value: false},
 		},
 
 		Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -60,25 +65,32 @@ func main() {
 			clients := make([]session.HostClient, 0, len(config.Inventory))
 			if cmd.Bool("all-hosts") {
 				for _, item := range config.Inventory {
-					c, err := session.DialSSHToHost(item.Host, item.Auth, cmd.Uint("timeout"))
+					c, err := session.DialSSHToHost(item.Host, item.Auth, cmd.Int64("timeout"))
 					if err != nil {
 						panic(err)
 					}
-					clients = append(clients, session.HostClient{item, c})
+					clients = append(clients, session.HostClient{Item: item, Client: c})
 				}
 
-				defer session.CloseClients(clients)
+				defer func() {
+					if err := session.CloseClients(clients); err != nil {
+						fmt.Fprintf(os.Stderr, "close session: %v\n", err)
+					}
+				}()
 			}
 
 			if cmd.Bool("no-barrier") {
-				resultsCh := make(chan session.TaskResult, 64)
+
+				resultsCh := make(chan session.TaskResult, ResultChannelBufferSize)
 				var wg sync.WaitGroup
 				wg.Add(len(clients))
 
 				for _, hc := range clients {
-					go func(hc session.HostClient) {
-						session.RunTaskOnHostWithoutBarrier(hc, config.Procedures, resultsCh, &wg)
-					}(hc)
+					go func() {
+						if err := session.RunTaskOnHostWithoutBarrier(hc, config.Procedures, resultsCh, &wg); err != nil {
+							resultsCh <- session.TaskResult{HostID: hc.Item.ID, ProcID: "", TaskID: "", Err: err}
+						}
+					}()
 					go func() { wg.Wait(); close(resultsCh) }()
 					var failures int
 					for r := range resultsCh {
@@ -96,11 +108,21 @@ func main() {
 			} else {
 				for _, proc := range config.Procedures {
 					for _, task := range proc.Tasks {
-						resultsCh := make(chan session.TaskResult, 64)
+						resultsCh := make(chan session.TaskResult, ResultChannelBufferSize)
 						var wg sync.WaitGroup
 						wg.Add(len(clients))
 						for _, hc := range clients {
-							go session.RunTaskOnHost(hc, proc, task, resultsCh, &wg)
+							go func() {
+								if err := session.RunTaskOnHost(hc, proc, task, resultsCh, &wg); err != nil {
+									resultsCh <- session.TaskResult{
+										HostID: hc.Item.ID, // adjust field names
+										ProcID: "",         // or "all"/"bootstrap"
+										TaskID: "",
+										Err:    err,
+									}
+								}
+
+							}()
 						}
 						go func() { wg.Wait(); close(resultsCh) }()
 						var failures int
