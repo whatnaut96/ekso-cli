@@ -74,8 +74,11 @@ func main() {
 				resultsCh := make(chan session.TaskResult, 64)
 				var wg sync.WaitGroup
 				wg.Add(len(clients))
+
 				for _, hc := range clients {
-					go session.RunTaskOnHostWithoutBarrier(hc, config.Procedures, resultsCh, &wg)
+					go func(hc session.HostClient) {
+						session.RunTaskOnHostWithoutBarrier(hc, config.Procedures, resultsCh, &wg)
+					}(hc)
 					go func() { wg.Wait(); close(resultsCh) }()
 					var failures int
 					for r := range resultsCh {
