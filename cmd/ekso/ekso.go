@@ -1,8 +1,10 @@
+// TODO: Follow same filter pattern for procedure filtering
 package main
 
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"sync"
@@ -37,7 +39,7 @@ func main() {
 			&cli.BoolFlag{Name: "no-barrier", Usage: "execute tasks without a barrier strategy", Value: false},
 			&cli.Int64Flag{Name: "timeout", Usage: "timeout length for ssh connections", Value: DefaultSSHTimeout},
 			&cli.StringFlag{Name: "procedure", Aliases: []string{"p"}, Usage: "tag name of the procedure to run"},
-			&cli.StringFlag{Name: "inventory", Aliases: []string{"p"}, Usage: "tag name of the hosts to run tasks on"},
+			&cli.StringFlag{Name: "inventory", Aliases: []string{"i"}, Usage: "tag name of the hosts to run tasks on"},
 			&cli.BoolFlag{Name: "all-hosts", Usage: "run procedure on all hosts", Value: false},
 			&cli.BoolFlag{Name: "all-procedures", Usage: "run all procedures on the host", Value: false},
 		},
@@ -50,34 +52,43 @@ func main() {
 				configData, err = os.ReadFile(cmd.String("file"))
 			} else if cmd.Bool("stdin") {
 				// Read from stdin
+				configData, err = io.ReadAll(os.Stdin)
 			} else {
 				return fmt.Errorf("no input method specified")
 			}
 
 			if err != nil {
-				panic(fmt.Errorf("failed to read config file: %w", err))
+				panic(fmt.Errorf("failed to read config input: %w", err))
 			}
 
 			var config Config
 			if err := yaml.Unmarshal(configData, &config); err != nil {
 				panic(fmt.Errorf("failed to unmarshal yaml: %w", err))
 			}
+
 			clients := make([]session.HostClient, 0, len(config.Inventory))
-			if cmd.Bool("all-hosts") {
-				for _, item := range config.Inventory {
-					c, err := session.DialSSHToHost(item.Host, item.Auth, cmd.Int64("timeout"))
-					if err != nil {
-						panic(err)
-					}
-					clients = append(clients, session.HostClient{Item: item, Client: c})
+			for _, item := range config.Inventory {
+				useHost := cmd.Bool("all-hosts") || item.ID == cmd.String("inventory")
+				if !useHost {
+					continue
 				}
 
-				defer func() {
-					if err := session.CloseClients(clients); err != nil {
-						fmt.Fprintf(os.Stderr, "close session: %v\n", err)
-					}
-				}()
+				client, err := session.DialSSHToHost(item.Host, item.Auth, cmd.Int64("timeout"))
+				if err != nil {
+					return fmt.Errorf("dial ssh host=%s: %w", item.ID, err)
+				}
+
+				clients = append(clients, session.HostClient{
+					Item:   item,
+					Client: client,
+				})
 			}
+
+			defer func() {
+				if err := session.CloseClients(clients); err != nil {
+					fmt.Fprintf(os.Stderr, "close session: %v\n", err)
+				}
+			}()
 
 			if cmd.Bool("no-barrier") {
 
