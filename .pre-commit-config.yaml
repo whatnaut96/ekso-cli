@@ -1,0 +1,24 @@
+repos:
+  - repo: local
+    hooks:
+      - id: go-fmt
+        name: go fmt 
+        entry: bash -c 'go fmt ./...'
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: go-vet
+        name: go vet
+        entry: bash -c 'go vet ./...'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: golangci-lint
+        name: golangci-lint
+        entry: bash -c 'golangci-lint run'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+      # Testing when done
