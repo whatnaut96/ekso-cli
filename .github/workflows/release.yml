@@ -9,9 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  build:
     runs-on: ubuntu-latest
-
     strategy:
       fail-fast: false
       matrix:
@@ -33,11 +32,9 @@ jobs:
             ext: ".exe"
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
 
-      - name: Set up Go
-        uses: actions/setup-go@v6
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -49,18 +46,30 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           EXT: ${{ matrix.ext }}
+
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: ekso-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/*
+          path: dist/ekso_${{ matrix.goos }}_${{ matrix.goarch }}${{ matrix.ext }}
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v6
         with:
           path: dist
+
+      - name: Flatten into dist/
+        run: |
+          mkdir -p release_dist
+          find dist -type f -maxdepth 3 -print -exec cp {} release_dist/ \;
+          ls -la release_dist
 
       - name: Create GitHub Release and upload binaries
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/**/*
+          files: release_dist/*
+          overwrite_files: false
