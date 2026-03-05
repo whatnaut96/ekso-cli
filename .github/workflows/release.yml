@@ -55,10 +55,6 @@ jobs:
           name: ekso-${{ matrix.goos }}-${{ matrix.goarch }}
           dist: /*
 
-    release:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
