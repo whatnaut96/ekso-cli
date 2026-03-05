@@ -12,6 +12,7 @@ go build cmd/ekso/ekso.go
 
 ```
 ## Usage
+***ekso is still pre 1.0, breaking changes are to be expected.***
 ```
 ekso -f <config.yaml> -p <procedure> -i <inventory> 
 
