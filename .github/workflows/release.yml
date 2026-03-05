@@ -42,7 +42,9 @@ jobs:
           go-version-file: go.mod
 
       - name: Build
-        run: ./gh_build.sh
+        run: |
+          chmod +x ./scripts/gh_build.sh
+          ./gh_build.sh
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
