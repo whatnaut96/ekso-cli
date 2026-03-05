@@ -44,7 +44,7 @@ jobs:
       - name: Build
         run: |
           chmod +x ./scripts/gh_build.sh
-          ./gh_build.sh
+          ./scripts/gh_build.sh
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
