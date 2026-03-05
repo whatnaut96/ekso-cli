@@ -53,7 +53,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: ekso-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: /*
+          path: dist/*
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
