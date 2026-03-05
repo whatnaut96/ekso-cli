@@ -90,15 +90,25 @@ func main() {
 				}
 			}()
 
-			if cmd.Bool("no-barrier") {
+			procs := make([]procedure.Procedure, 0, len(config.Procedures))
+			for _, proc := range config.Procedures {
+				useProcedure := cmd.Bool("all-procedures") || proc.ID == cmd.String("procedure")
+				if !useProcedure {
+					continue
+				}
+				procs = append(procs, proc)
+			}
 
+			_ = procs
+
+			if cmd.Bool("no-barrier") {
 				resultsCh := make(chan session.TaskResult, ResultChannelBufferSize)
 				var wg sync.WaitGroup
 				wg.Add(len(clients))
 
 				for _, hc := range clients {
 					go func() {
-						if err := session.RunTaskOnHostWithoutBarrier(hc, config.Procedures, resultsCh, &wg); err != nil {
+						if err := session.RunTaskOnHostWithoutBarrier(hc, procs, resultsCh, &wg); err != nil {
 							resultsCh <- session.TaskResult{HostID: hc.Item.ID, ProcID: "", TaskID: "", Err: err}
 						}
 					}()
@@ -117,7 +127,7 @@ func main() {
 					}
 				}
 			} else {
-				for _, proc := range config.Procedures {
+				for _, proc := range procs {
 					for _, task := range proc.Tasks {
 						resultsCh := make(chan session.TaskResult, ResultChannelBufferSize)
 						var wg sync.WaitGroup
