@@ -1,5 +1,5 @@
 # ekso
-ekso is a deterministic, distributed procedure runner over SSH
+ekso is a deterministic, remote/distributed procedure runner over SSH
 
 It allows you to define ordered procedures composed of tasks and execute them across multiple hosts using explicit concurrency strategies.
 
