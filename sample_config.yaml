@@ -1,0 +1,19 @@
+inventory:
+  - id: local 
+    host:
+      address: localhost
+      user: khill 
+    auth:
+      password:
+        env: web_pass
+procedures:
+- id: default
+  tasks:
+    - id: test_touch
+      shell: "zsh"
+      command:
+        argv: ["touch", "/Users/khill/Documents/Repositories/ekso/test.txt"]
+    - id: brew_update
+      shell: "zsh"
+      command:
+        exec: "brew update"
